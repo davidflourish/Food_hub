@@ -1,0 +1,696 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 14px;
+  --background: #ffffff;
+  --foreground: oklch(0.145 0 0);
+  --card: #ffffff;
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: #030213;
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.95 0.0058 264.53);
+  --secondary-foreground: #030213;
+  --muted: #ececf0;
+  --muted-foreground: #717182;
+  --accent: #e9ebef;
+  --accent-foreground: #030213;
+  --destructive: #d4183d;
+  --destructive-foreground: #ffffff;
+  --border: rgba(0, 0, 0, 0.1);
+  --input: transparent;
+  --input-background: #f3f3f5;
+  --switch-background: #cbced4;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: #030213;
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+  
+  /* FoodHub specific colors */
+  --foodhub-red: #ef4444;
+  --foodhub-red-light: #fecaca;
+  --foodhub-red-dark: #dc2626;
+  --foodhub-green: #22c55e;
+  --foodhub-green-light: #bbf7d0;
+  --foodhub-green-dark: #16a34a;
+  --foodhub-orange: #f97316;
+  --foodhub-yellow: #eab308;
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  
+  /* FoodHub colors */
+  --color-foodhub-red: var(--foodhub-red);
+  --color-foodhub-red-light: var(--foodhub-red-light);
+  --color-foodhub-red-dark: var(--foodhub-red-dark);
+  --color-foodhub-green: var(--foodhub-green);
+  --color-foodhub-green-light: var(--foodhub-green-light);
+  --color-foodhub-green-dark: var(--foodhub-green-dark);
+  --color-foodhub-orange: var(--foodhub-orange);
+  --color-foodhub-yellow: var(--foodhub-yellow);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/**
+ * Base typography. This is not applied to elements which have an ancestor with a Tailwind text class.
+ */
+@layer base {
+  :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) {
+    h1 {
+      font-size: var(--text-2xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h2 {
+      font-size: var(--text-xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h3 {
+      font-size: var(--text-lg);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h4 {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    p {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+
+    label {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    button {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    input {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+  }
+}
+
+html {
+  font-size: var(--font-size);
+}
+
+/* Enhanced utilities for job board */
+@layer utilities {
+  .line-clamp-2 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .line-clamp-3 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Smooth transitions for hover effects */
+  .transition-all {
+    transition-property: all;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+
+  /* Enhanced card hover effects */
+  .hover\:scale-\[1\.02\]:hover {
+    transform: scale(1.02);
+  }
+
+  /* Gradient text utilities */
+  .bg-clip-text {
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+
+  .text-transparent {
+    color: transparent;
+  }
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .mobile-optimized {
+    font-size: 14px;
+  }
+  
+  .mobile-card-padding {
+    padding: 1rem;
+  }
+  
+  .mobile-chip-scroll {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .mobile-chip-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* FoodHub mobile improvements */
+  .foodhub-container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  .foodhub-card {
+    margin-bottom: 1rem;
+    border-radius: 0.75rem;
+  }
+  
+  .foodhub-button {
+    padding: 0.75rem 1rem;
+    min-height: 44px;
+    font-size: 0.9rem;
+  }
+  
+  .foodhub-input {
+    padding: 0.75rem;
+    min-height: 44px;
+    font-size: 16px; /* Prevents iOS zoom */
+  }
+  
+  .foodhub-dialog {
+    margin: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+  }
+}
+
+/* Enhanced mobile banking optimizations */
+@layer utilities {
+  /* Touch-friendly buttons */
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+  
+  /* Mobile-first tab layout */
+  .mobile-tab-layout {
+    min-height: 3rem;
+    padding: 0.5rem 0.25rem;
+  }
+  
+  /* Better mobile text truncation */
+  .mobile-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  /* Mobile-specific spacing */
+  .mobile-spacing-y {
+    margin-top: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  /* Mobile card improvements */
+  .mobile-card {
+    margin: 0.5rem 0;
+    padding: 1rem;
+    border-radius: 0.75rem;
+  }
+  
+  /* Safe area for mobile devices */
+  .safe-area-inset {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  /* Enhanced mobile navigation */
+  .mobile-nav-container {
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  
+  .mobile-nav-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+    width: 100%;
+    min-width: 0;
+  }
+  
+  .mobile-nav-item {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 0.25rem;
+    text-align: center;
+  }
+  
+  .mobile-nav-text {
+    font-size: 0.75rem;
+    line-height: 1;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+}
+
+/* FoodHub Navigation Styles */
+.foodhub-nav-container {
+  background: white;
+  border-radius: 0.75rem;
+  padding: 0.375rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(229, 231, 235, 0.8);
+  width: 100%;
+  overflow: hidden;
+}
+
+.foodhub-nav-item {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0.625rem 0.375rem !important;
+  gap: 0.25rem !important;
+  border-radius: 0.5rem !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  cursor: pointer !important;
+  position: relative !important;
+  min-height: 3.75rem !important;
+  min-width: 0 !important;
+  text-align: center !important;
+}
+
+.foodhub-nav-item:hover {
+  background: rgba(254, 242, 242, 0.8) !important;
+}
+
+.foodhub-nav-item[data-state="active"] {
+  background: linear-gradient(135deg, rgb(254 242 242) 0%, rgb(240 253 244) 100%) !important;
+  border: 1px solid rgb(252 165 165) !important;
+  box-shadow: 0 1px 2px 0 rgba(239, 68, 68, 0.1) !important;
+}
+
+.foodhub-nav-icon {
+  flex-shrink: 0 !important;
+  stroke-width: 1.5 !important;
+  color: rgb(107, 114, 128) !important;
+  transition: color 0.2s ease !important;
+  width: 1.25rem !important;
+  height: 1.25rem !important;
+}
+
+.foodhub-nav-item[data-state="active"] .foodhub-nav-icon {
+  color: rgb(220, 38, 38) !important;
+}
+
+.foodhub-nav-label {
+  font-size: 0.6875rem !important;
+  font-weight: 500 !important;
+  color: rgb(75, 85, 99) !important;
+  line-height: 1.1 !important;
+  text-align: center !important;
+  transition: color 0.2s ease !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  display: block !important;
+  letter-spacing: -0.005em !important;
+}
+
+.foodhub-nav-item[data-state="active"] .foodhub-nav-label {
+  color: rgb(185, 28, 28) !important;
+}
+
+/* Mobile-optimized header styles */
+@media (max-width: 640px) {
+  .mobile-header {
+    height: 3.5rem;
+    padding: 0 0.75rem;
+  }
+  
+  .mobile-header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 100%;
+    gap: 0.5rem;
+  }
+  
+  .mobile-logo-section {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    flex: 1;
+  }
+  
+  .mobile-action-buttons {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+  }
+  
+  .mobile-icon-button {
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.375rem;
+    transition: background-color 0.15s ease;
+  }
+  
+  .mobile-icon-button:active {
+    background-color: rgba(0, 0, 0, 0.05);
+    transform: scale(0.95);
+  }
+  
+  /* FoodHub navigation mobile styles */
+  .foodhub-nav-container {
+    margin: 0 0.5rem !important;
+    padding: 0.1875rem !important;
+    border-radius: 0.75rem !important;
+    background: white !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+  }
+  
+  .foodhub-nav-item {
+    padding: 0.375rem 0.0625rem !important;
+    gap: 0.125rem !important;
+    min-height: 3rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 0.375rem !important;
+    position: relative !important;
+  }
+  
+  .foodhub-nav-icon {
+    width: 1rem !important;
+    height: 1rem !important;
+    flex-shrink: 0 !important;
+    margin-bottom: 0 !important;
+    stroke-width: 1.5 !important;
+  }
+  
+  .foodhub-nav-label {
+    font-size: 0.5625rem !important;
+    font-weight: 500 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    line-height: 1 !important;
+    margin-top: 0 !important;
+    letter-spacing: -0.01em !important;
+    text-align: center !important;
+    padding: 0 0.125rem !important;
+  }
+  
+  /* Prevent text overflow on very small screens */
+  .mobile-truncate-text {
+    max-width: 4rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  /* Extra small screen optimizations */
+  @media (max-width: 375px) {
+    .foodhub-nav-container {
+      margin: 0 0.25rem !important;
+      padding: 0.125rem !important;
+    }
+    
+    .foodhub-nav-item {
+      padding: 0.25rem 0.0625rem !important;
+      gap: 0.0625rem !important;
+      min-height: 2.75rem !important;
+    }
+    
+    .foodhub-nav-icon {
+      width: 0.875rem !important;
+      height: 0.875rem !important;
+    }
+    
+    .foodhub-nav-label {
+      font-size: 0.5rem !important;
+      padding: 0 0.0625rem !important;
+      max-width: 3.5rem !important;
+    }
+  }
+  
+  /* Ensure text visibility on all screens */
+  .foodhub-nav-label {
+    -webkit-font-smoothing: antialiased !important;
+    -moz-osx-font-smoothing: grayscale !important;
+    text-rendering: optimizeLegibility !important;
+  }
+  
+  /* Better contrast for small text */
+  .foodhub-nav-item .foodhub-nav-label {
+    color: rgb(55, 65, 81) !important;
+  }
+  
+  .foodhub-nav-item[data-state="active"] .foodhub-nav-label {
+    color: rgb(185, 28, 28) !important;
+    font-weight: 600 !important;
+  }
+  
+  /* Mobile-specific improvements for bill payments and other components */
+  .mobile-tab-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.25rem;
+  }
+  
+  .mobile-tab-grid-2 .mobile-tab-item:nth-child(3),
+  .mobile-tab-grid-2 .mobile-tab-item:nth-child(4) {
+    margin-top: 0.25rem;
+  }
+  
+  /* Better mobile card spacing */
+  .mobile-card-container {
+    padding: 0.75rem;
+    margin: 0.25rem 0;
+  }
+  
+  /* Mobile transaction improvements */
+  .mobile-transaction-item {
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(229, 231, 235, 0.8);
+    margin-bottom: 0.5rem;
+  }
+  
+  .mobile-transaction-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  @media (min-width: 640px) {
+    .mobile-transaction-content {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+  }
+  
+  /* Card toggle improvements */
+  .card-toggle-section {
+    padding: 0.25rem 0;
+    border-bottom: 1px solid rgba(229, 231, 235, 0.3);
+  }
+  
+  .card-toggle-section:last-child {
+    border-bottom: none;
+  }
+  
+  /* FoodHub-specific mobile improvements */
+  .foodhub-mobile-card {
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  
+  .foodhub-mobile-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+  
+  /* Mobile form improvements */
+  .foodhub-mobile-form {
+    padding: 1rem;
+  }
+  
+  .foodhub-mobile-input {
+    min-height: 44px; /* iOS recommended touch target */
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+  
+  .foodhub-mobile-button {
+    min-height: 44px;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+    touch-action: manipulation;
+  }
+  
+  /* Mobile tab improvements */
+  .foodhub-mobile-tabs {
+    padding: 0.125rem;
+    border-radius: 0.75rem;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(229, 231, 235, 0.5);
+  }
+  
+  .foodhub-mobile-tab {
+    min-height: 3rem;
+    border-radius: 0.625rem;
+    transition: all 0.2s ease;
+  }
+  
+  .foodhub-mobile-tab[data-state="active"] {
+    background: linear-gradient(135deg, #fef2f2 0%, #f0fdf4 100%);
+    color: #dc2626;
+    font-weight: 600;
+  }
+}
