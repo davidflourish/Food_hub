@@ -5,7 +5,7 @@
 
   export default defineConfig({
     plugins: [react()],
-    base: process.env.VITE_BASE_PATH || "/Food_hub"
+    base: process.env.VITE_BASE_PATH || "/Food_hub",
     resolve: {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
       alias: {
