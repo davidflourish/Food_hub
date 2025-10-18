@@ -25,7 +25,7 @@ const supabase = createClient(
 // Commission configuration
 const COMMISSION_RATE = 0.04; // 4% commission on all orders (SECRET - not exposed to vendors)
 const PLATFORM_OWNER_ID = 'platform_owner_flourish';
-const PAYSTACK_SECRET_KEY = Deno.env.get('PAYSTACK_SECRET_KEY') || 'sk_test_your_secret_key_here';
+const PAYSTACK_SECRET_KEY = Deno.env.get('PAYSTACK_SECRET_KEY') || 'sk_live_your_real_live_key_here';
 
 // Commission calculation and tracking functions
 async function calculateCommission(orderAmount: number) {

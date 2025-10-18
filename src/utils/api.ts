@@ -15,7 +15,7 @@ async function apiCall(endpoint: string, options: RequestInit = {}) {
     token = publicAnonKey;
     
     // Add admin user info to headers
-    const headers = {
+    const headers = { 
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'X-Admin-User': adminUser,

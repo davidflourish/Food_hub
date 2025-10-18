@@ -270,7 +270,7 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
       }
 
       // Open Paystack payment popup
-      const paystackPublicKey = 'pk_test_560ded5db8f17a662bbfc72bd00ccc3885f82e7d'; // Paystack test public key
+      const paystackPublicKey = 'pk_live_66da9b621828a364e77c12d4dcd98d28888f9607'; // Paystack test public key
       const handler = (window as any).PaystackPop.setup({
         key: paystackPublicKey,
         email: user.email,
