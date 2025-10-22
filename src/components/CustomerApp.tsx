@@ -200,6 +200,7 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
     }
 
     setProcessingPayment(true);
+   
 
     try {
       // Group cart items by vendor
@@ -244,12 +245,15 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
 
       const orderData = await orderResponse.json();
 
-      if (!orderResponse.ok) {
-        throw new Error(orderData.error || 'Failed to create order');
-      }
+      // if (!orderResponse.ok) {
+      //   throw new Error(orderData.error || 'Failed to create order');
+      // }
 
+      if (orderResponse.ok) {
+        // console.log('Order created:', orderData);
+            setShowCheckoutDialog(false);
       const orderId = orderData.orderId;
-
+      
       // Initialize Paystack payment
       const paymentResponse = await paymentAPI.initialize(orderId, user.email, finalTotal);
 
@@ -290,7 +294,7 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
             if (verifyResponse.success) {
               toast.success('Payment successful! Order confirmed.');
               setCart([]);
-              setShowCheckoutDialog(false);
+              // setShowCheckoutDialog(false);
               setDeliveryAddress('');
               setDeliveryNotes('');
               setActiveTab('orders');
@@ -307,6 +311,9 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
       });
 
       handler.openIframe();
+      }
+
+
     } catch (error) {
       console.error('Checkout error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to process checkout');
@@ -363,6 +370,7 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
       console.log(`Error loading menu for vendor ${vendorId}:`, error);
     } finally {
       setLoadingMenus(false);
+  
     }
   };
 
@@ -671,6 +679,7 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
                       onClick={() => {
                         setSelectedVendor(vendor.id);
                         loadVendorMenu(vendor.id);
+                        setActiveTab('browse');
                       }}
                     >
                       View Menu
@@ -863,7 +872,10 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
             </Button>
             <Button
               className="bg-gradient-to-r from-red-500 to-green-500 hover:from-red-600 hover:to-green-600"
-              onClick={handleCheckout}
+              onClick={() => {
+                handleCheckout()
+              
+              }}
               disabled={processingPayment || !deliveryAddress.trim()}
             >
               {processingPayment ? (
