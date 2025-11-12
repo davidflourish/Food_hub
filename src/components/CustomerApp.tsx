@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '../utils/supabase/client';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -21,7 +22,7 @@ import {
   Receipt,
   ChefHat
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from 'sonner@2.0.3';
 import { customerAPI, paymentAPI } from '../utils/api';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
 import { formatNaira, nigerianBanks } from '../utils/paystack';
@@ -39,7 +40,7 @@ interface User {
 
 interface CustomerAppProps {
   user: User;
-  onSignOut: () => void;
+  onSignOut?: () => void;  // Optional now
 }
 
 interface Vendor {
@@ -101,7 +102,7 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
           deliveryTime: '20-30 min', // Default for now
           image: 'https://images.unsplash.com/photo-1645066803695-f0dbe2c33e42?w=400', // Default image
           isOpen: vendor.status === 'active',
-          deliveryFee: 450, // Default delivery fee
+          deliveryFee: 250, // Default delivery fee
           distance: '1-2 km' // Default distance
         }));
         
@@ -124,7 +125,20 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
     loadVendorsAndMenus();
   }, []);
 
-
+  const handleLocalSignOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();  // Modern v2 call
+      if (error) throw error;
+      
+      toast.success('Signed out successfully!');
+      // Redirect or emit event to parent
+      window.location.href = '/';  // Simple redirect
+      localStorage.removeItem('foodhub_admin_user');
+    } catch (error) {
+      console.error('Sign out error:', error);
+      toast.error('Failed to sign out—try refreshing.');
+    }
+  };
 
   const addToCart = (item: MenuItem) => {
     setCart(prev => {
@@ -198,6 +212,7 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
     }
 
     setProcessingPayment(true);
+   
 
     try {
       // Group cart items by vendor
@@ -248,11 +263,9 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
         throw new Error(orderData.error || 'Failed to create order');
       }
 
-      const orderId = orderData.orderId;
-
-      // Close dialog early after successful order creation
       setShowCheckoutDialog(false);
-
+      const orderId = orderData.orderId;
+      
       // Initialize Paystack payment
       const paymentResponse = await paymentAPI.initialize(orderId, user.email, finalTotal);
 
@@ -273,7 +286,7 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
       }
 
       // Open Paystack payment popup
-      const paystackPublicKey = 'pk_test_560ded5db8f17a662bbfc72bd00ccc3885f82e7d'; // Paystack test public key
+      const paystackPublicKey = 'pk_live_66da9b621828a364e77c12d4dcd98d28888f9607'; // Paystack live public key
       const handler = (window as any).PaystackPop.setup({
         key: paystackPublicKey,
         email: user.email,
@@ -285,28 +298,26 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
           toast.info('Payment cancelled');
         },
         callback: function(response: any) {
-          // Verify payment (handle async with promises)
-          paymentAPI.verify(response.reference)
-            .then((verifyResponse) => {
-              if (verifyResponse.success) {
-                toast.success('Payment successful! Order confirmed.');
-                setCart([]);
-                setDeliveryAddress('');
-                setDeliveryNotes('');
-                setCustomerName('');
-                setCustomerPhone('');
-                setActiveTab('orders');
-              } else {
-                toast.error('Payment verification failed');
-              }
-            })
-            .catch((error) => {
-              console.error('Payment verification error:', error);
-              toast.error('Failed to verify payment');
-            })
-            .finally(() => {
-              setProcessingPayment(false);
-            });
+          console.log('Paystack success:', response);  // Debug log (remove after testing)
+          // Verify payment
+          paymentAPI.verify(response.reference).then((verifyResponse) => {
+            if (verifyResponse.success) {
+              toast.success('Payment successful! Order confirmed.');
+              setCart([]);
+              setDeliveryAddress('');
+              setDeliveryNotes('');
+              setCustomerName('');
+              setCustomerPhone('');
+              setActiveTab('orders');
+            } else {
+              toast.error('Payment verification failed');
+            }
+          }).catch((error) => {
+            console.error('Payment verification error:', error);
+            toast.error('Failed to verify payment');
+          }).finally(() => {
+            setProcessingPayment(false);
+          });
         }
       });
 
@@ -367,6 +378,7 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
       console.log(`Error loading menu for vendor ${vendorId}:`, error);
     } finally {
       setLoadingMenus(false);
+  
     }
   };
 
@@ -412,7 +424,7 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
                 </div>
               </div>
 
-              <Button variant="outline" size="sm" onClick={onSignOut}>
+              <Button variant="outline" size="sm" onClick={onSignOut || handleLocalSignOut}>
                 <LogOut className="h-4 w-4 mr-2" />
                 Sign Out
               </Button>
@@ -594,7 +606,15 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
                           
                           <div className="flex items-center justify-between">
                             <span className="text-sm text-gray-600">Delivery: ₦{vendor.deliveryFee.toLocaleString()}</span>
-                            <Button size="sm" variant="outline">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedVendor(vendor.id);
+                                loadVendorMenu(vendor.id);
+                              }}
+                            >
                               View Menu
                             </Button>
                           </div>
@@ -881,7 +901,7 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
             </Card>
           </div>
 
-         <DialogFooter>
+          <DialogFooter>
             <Button
               variant="outline"
               onClick={() => setShowCheckoutDialog(false)}
@@ -891,11 +911,8 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
             </Button>
             <Button
               className="bg-gradient-to-r from-red-500 to-green-500 hover:from-red-600 hover:to-green-600"
-              onClick={() => {
-                handleCheckout()
-              
-              }}
-              disabled={processingPayment || !deliveryAddress.trim()}
+              onClick={handleCheckout}
+              disabled={processingPayment || !deliveryAddress.trim() || !customerName.trim() || !customerPhone.trim()}
             >
               {processingPayment ? (
                 <div className="flex items-center gap-2">
