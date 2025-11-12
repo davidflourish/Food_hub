@@ -3,7 +3,7 @@ import { adminAPI } from '../utils/api';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-// import { Input } from './ui/input';
+import { Input } from './ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -28,13 +28,14 @@ import {
   Phone,
   Mail,
   Shield,
-  Save
+  Save,
+  Download
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { toast } from 'sonner@2.0.3';
 import { getAdminCredentials, updateAdminCredentials } from '../utils/adminAuth';
+import { nigerianBanks, formatNaira } from '../utils/paystack';
 
 interface User {
   id: string;
@@ -105,29 +106,61 @@ export function FoodHubAdminDashboard({ user, onSignOut }: FoodHubAdminDashboard
   const [loadingVendors, setLoadingVendors] = useState(true);
   const [commissionData, setCommissionData] = useState<any>(null);
   const [loadingCommissions, setLoadingCommissions] = useState(true);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(true);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
+  const [withdrawalAmount, setWithdrawalAmount] = useState('');
+  const [withdrawalPassword, setWithdrawalPassword] = useState('');
+  const [withdrawalBankCode, setWithdrawalBankCode] = useState('');
+  const [withdrawalAccountNumber, setWithdrawalAccountNumber] = useState('');
+  const [withdrawalAccountName, setWithdrawalAccountName] = useState('');
+  const [adminWithdrawals, setAdminWithdrawals] = useState<any[]>([]);
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        // Load vendors
-        const vendorData = await adminAPI.getVendors();
-        setVendors(vendorData.vendors || []);
-        
-        // Load commission data
-        const commissionResponse = await adminAPI.getCommissions();
-        setCommissionData(commissionResponse);
-      } catch (error) {
-        console.error('Error loading data:', error);
-        setVendors([]);
-        setCommissionData(null);
-      } finally {
-        setLoadingVendors(false);
-        setLoadingCommissions(false);
-      }
-    };
-
     loadData();
+    loadAdminWithdrawals();
   }, []);
+
+  const loadData = async () => {
+    try {
+      setLoadingVendors(true);
+      setLoadingCommissions(true);
+      setLoadingOrders(true);
+
+      // Load vendors
+      const vendorData = await adminAPI.getVendors();
+      setVendors(vendorData.vendors || []);
+      
+      // Load commission data
+      const commissionResponse = await adminAPI.getCommissions();
+      setCommissionData(commissionResponse);
+
+      // Load orders
+      const ordersData = await adminAPI.getOrders();
+      setOrders(ordersData.orders || []);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      setVendors([]);
+      setCommissionData(null);
+      setOrders([]);
+    } finally {
+      setLoadingVendors(false);
+      setLoadingCommissions(false);
+      setLoadingOrders(false);
+    }
+  };
+
+  const loadAdminWithdrawals = async () => {
+    try {
+      const data = await adminAPI.getWithdrawals();
+      if (data.withdrawals) {
+        setAdminWithdrawals(data.withdrawals);
+      }
+    } catch (error) {
+      console.error('Error loading admin withdrawals:', error);
+    }
+  };
 
   const handleDeleteVendor = async (vendorId: string, vendorName: string) => {
     if (!window.confirm(`Are you sure you want to delete ${vendorName}? This action cannot be undone and will delete all their menu items and orders.`)) {
@@ -141,47 +174,111 @@ export function FoodHubAdminDashboard({ user, onSignOut }: FoodHubAdminDashboard
       
       if (response.success) {
         setVendors(prev => prev.filter(v => v.id !== vendorId));
+        toast.dismiss();
         toast.success('Vendor deleted successfully');
       } else {
         throw new Error('Failed to delete vendor');
       }
     } catch (error) {
       console.error('Error deleting vendor:', error);
-      toast.error('Failed to delete vendor. Please try again.');
-    } finally {
       toast.dismiss();
+      toast.error('Failed to delete vendor. Please try again.');
     }
   };
 
-  const [orders] = useState<Order[]>([
-    {
-      id: 'ORD001',
-      vendorId: '1',
-      vendorName: 'Spice Garden Restaurant',
-      customerName: 'Sarah Johnson',
-      amount: 24.99,
-      status: 'preparing',
-      orderTime: new Date(Date.now() - 15 * 60 * 1000).toISOString()
-    },
-    {
-      id: 'ORD002',
-      vendorId: '2',
-      vendorName: 'Healthy Bites Co.',
-      customerName: 'Mike Chen',
-      amount: 18.50,
-      status: 'ready',
-      orderTime: new Date(Date.now() - 25 * 60 * 1000).toISOString()
-    },
-    {
-      id: 'ORD003',
-      vendorId: '1',
-      vendorName: 'Spice Garden Restaurant',
-      customerName: 'Emma Davis',
-      amount: 32.75,
-      status: 'delivered',
-      orderTime: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+  const handleToggleVendorStatus = async (vendorId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
+    
+    try {
+      await adminAPI.updateVendorStatus(vendorId, newStatus);
+      setVendors(prev => prev.map(v => 
+        v.id === vendorId ? { ...v, status: newStatus as 'active' | 'inactive' | 'suspended' } : v
+      ));
+      toast.success(`Vendor ${newStatus === 'active' ? 'activated' : 'suspended'} successfully`);
+    } catch (error) {
+      console.error('Error updating vendor status:', error);
+      toast.error('Failed to update vendor status');
     }
-  ]);
+  };
+
+  const handleVerifyVendor = async (vendorId: string, currentVerified: boolean) => {
+    try {
+      await adminAPI.updateVendorStatus(vendorId, 'active', !currentVerified);
+      setVendors(prev => prev.map(v => 
+        v.id === vendorId ? { ...v, isVerified: !currentVerified } : v
+      ));
+      toast.success(`Vendor ${!currentVerified ? 'verified' : 'unverified'} successfully`);
+    } catch (error) {
+      console.error('Error verifying vendor:', error);
+      toast.error('Failed to verify vendor');
+    }
+  };
+
+  const handleAdminWithdraw = async () => {
+    const amount = parseFloat(withdrawalAmount);
+    
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    if (!withdrawalPassword) {
+      toast.error('Please enter your password');
+      return;
+    }
+
+    if (!withdrawalBankCode || !withdrawalAccountNumber) {
+      toast.error('Please fill in all bank details');
+      return;
+    }
+
+    if (amount < 1000) {
+      toast.error('Minimum withdrawal amount is ₦1,000');
+      return;
+    }
+
+    const availableBalance = (commissionData?.summary?.totalEarnings || 0) - 
+                            (commissionData?.platformEarnings?.totalWithdrawn || 0);
+
+    if (amount > availableBalance) {
+      toast.error('Insufficient balance');
+      return;
+    }
+
+    setWithdrawing(true);
+
+    try {
+      const result = await adminAPI.withdraw(
+        amount, 
+        withdrawalPassword,
+        withdrawalBankCode,
+        withdrawalAccountNumber,
+        withdrawalAccountName
+      );
+      
+      if (result.success) {
+        toast.success('Withdrawal initiated successfully!');
+        setShowWithdrawDialog(false);
+        setWithdrawalAmount('');
+        setWithdrawalPassword('');
+        setWithdrawalBankCode('');
+        setWithdrawalAccountNumber('');
+        setWithdrawalAccountName('');
+        
+        // Reload commission data and withdrawals
+        const commissionResponse = await adminAPI.getCommissions();
+        setCommissionData(commissionResponse);
+        await loadAdminWithdrawals();
+      }
+    } catch (error: any) {
+      console.error('Withdrawal error:', error);
+      toast.error(error.message || 'Failed to process withdrawal');
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
+
 
   const [reviews] = useState<Review[]>([
     {
@@ -489,22 +586,36 @@ export function FoodHubAdminDashboard({ user, onSignOut }: FoodHubAdminDashboard
                   <CardDescription>Latest customer orders</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    {orders.slice(0, 3).map((order) => (
-                      <div key={order.id} className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">{order.customerName}</p>
-                          <p className="text-sm text-gray-600">{order.vendorName}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold">${order.amount}</p>
-                          <Badge className={`text-xs ${getStatusColor(order.status)}`}>
-                            {order.status}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  {loadingOrders ? (
+                    <div className="text-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-2 border-red-500 border-t-transparent mx-auto"></div>
+                    </div>
+                  ) : orders.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <ShoppingBag className="h-10 w-10 mx-auto mb-2 text-gray-400" />
+                      <p className="text-sm">No orders yet</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {orders.slice(0, 3).map((order) => {
+                        const vendor = vendors.find(v => v.id === order.vendorId);
+                        return (
+                          <div key={order.id} className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium">{order.customerName || order.customerEmail || 'Guest'}</p>
+                              <p className="text-sm text-gray-600">{vendor?.businessName || 'Unknown Vendor'}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold">₦{order.amount.toLocaleString()}</p>
+                              <Badge className={`text-xs ${getStatusColor(order.status)}`}>
+                                {order.status}
+                              </Badge>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -535,6 +646,31 @@ export function FoodHubAdminDashboard({ user, onSignOut }: FoodHubAdminDashboard
           </TabsContent>
 
           <TabsContent value="commissions" className="space-y-6">
+            {/* Withdraw Button Section */}
+            <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-green-700">Available Balance</p>
+                    <p className="text-3xl font-bold text-green-900">
+                      ₦{((commissionData?.summary?.totalEarnings || 0) - (commissionData?.platformEarnings?.totalWithdrawn || 0)).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-green-600 mt-1">
+                      Total Withdrawn: ₦{(commissionData?.platformEarnings?.totalWithdrawn || 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => setShowWithdrawDialog(true)}
+                    className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
+                    disabled={((commissionData?.summary?.totalEarnings || 0) - (commissionData?.platformEarnings?.totalWithdrawn || 0)) <= 0}
+                  >
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Withdraw Earnings
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Commission Overview Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <Card>
@@ -655,6 +791,65 @@ export function FoodHubAdminDashboard({ user, onSignOut }: FoodHubAdminDashboard
                 )}
               </CardContent>
             </Card>
+
+            {/* Withdrawal History */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Withdrawal History</CardTitle>
+                <CardDescription>Track your commission withdrawals</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {adminWithdrawals.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Download className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-gray-600">No withdrawals yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {adminWithdrawals.map((withdrawal: any) => (
+                      <div key={withdrawal.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                            <Download className="h-5 w-5 text-orange-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium">Withdrawal</p>
+                            <p className="text-xs text-gray-500">
+                              {new Date(withdrawal.createdAt).toLocaleDateString('en-NG', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                            {withdrawal.accountNumber && (
+                              <p className="text-xs text-gray-500">
+                                Account: •••• {withdrawal.accountNumber.slice(-4)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-orange-600">-₦{withdrawal.amount.toLocaleString()}</p>
+                          <Badge
+                            className={`text-xs ${
+                              withdrawal.status === 'completed' || withdrawal.status === 'success'
+                                ? 'bg-green-100 text-green-800'
+                                : withdrawal.status === 'pending'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}
+                          >
+                            {withdrawal.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="vendors" className="space-y-6">
@@ -749,17 +944,47 @@ export function FoodHubAdminDashboard({ user, onSignOut }: FoodHubAdminDashboard
                         </div>
                       </div>
                       
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm">
-                          <Eye className="h-4 w-4 mr-1" />
-                          View
-                        </Button>
+                      <div className="flex gap-2 flex-wrap">
+                        {!vendor.isVerified && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="text-green-600 hover:bg-green-50"
+                            onClick={() => handleVerifyVendor(vendor.id, vendor.isVerified)}
+                          >
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Verify User
+                          </Button>
+                        )}
+                        {vendor.isVerified && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="text-gray-600"
+                            onClick={() => handleVerifyVendor(vendor.id, vendor.isVerified)}
+                          >
+                            <XCircle className="h-4 w-4 mr-1" />
+                            Unverify
+                          </Button>
+                        )}
                         {vendor.status === 'active' ? (
-                          <Button variant="outline" size="sm" className="text-red-600">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-red-600 hover:bg-red-50"
+                            onClick={() => handleToggleVendorStatus(vendor.id, vendor.status)}
+                          >
+                            <AlertCircle className="h-4 w-4 mr-1" />
                             Suspend
                           </Button>
                         ) : (
-                          <Button variant="outline" size="sm" className="text-green-600">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-green-600 hover:bg-green-50"
+                            onClick={() => handleToggleVendorStatus(vendor.id, vendor.status)}
+                          >
+                            <CheckCircle className="h-4 w-4 mr-1" />
                             Activate
                           </Button>
                         )}
@@ -789,45 +1014,88 @@ export function FoodHubAdminDashboard({ user, onSignOut }: FoodHubAdminDashboard
           </TabsContent>
 
           <TabsContent value="orders" className="space-y-6">
-            <div className="grid grid-cols-1 gap-4">
-              {orders.map((order) => (
-                <Card key={order.id} className="hover:shadow-lg transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <Badge className={`${getStatusColor(order.status)}`}>
-                            {order.status}
+            {loadingOrders ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-2 border-red-500 border-t-transparent mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading orders...</p>
+              </div>
+            ) : orders.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <ShoppingBag className="h-10 w-10 text-gray-400" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">No Orders Yet</h3>
+                <p className="text-gray-600">Orders will appear here once customers start placing orders.</p>
+              </div>
+            ) : (
+              <>
+                {/* Group orders by vendor */}
+                {vendors.map((vendor) => {
+                  const vendorOrders = orders.filter(order => order.vendorId === vendor.id);
+                  
+                  if (vendorOrders.length === 0) return null;
+                  
+                  return (
+                    <Card key={vendor.id} className="overflow-hidden">
+                      <CardHeader className="bg-gradient-to-r from-red-50 to-green-50 border-b">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10">
+                              <AvatarFallback className="bg-gradient-to-r from-red-500 to-green-500 text-white">
+                                {vendor.businessName.split(' ').map(n => n[0]).join('')}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <CardTitle className="text-lg">{vendor.businessName}</CardTitle>
+                              <CardDescription>{vendorOrders.length} order(s)</CardDescription>
+                            </div>
+                          </div>
+                          <Badge className="bg-green-100 text-green-800">
+                            ₦{vendorOrders.reduce((sum, order) => sum + order.amount, 0).toLocaleString()}
                           </Badge>
-                          <span className="font-mono text-sm text-gray-600">#{order.id}</span>
-                          <span className="text-sm text-gray-500">{getTimeAgo(order.orderTime)}</span>
                         </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div>
-                            <p className="text-sm text-gray-600">Customer</p>
-                            <p className="font-medium">{order.customerName}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Vendor</p>
-                            <p className="font-medium">{order.vendorName}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Amount</p>
-                            <p className="font-semibold text-green-600">₦{order.amount}</p>
-                          </div>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        <div className="divide-y">
+                          {vendorOrders.map((order) => (
+                            <div key={order.id} className="p-4 hover:bg-gray-50 transition-colors">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <Badge className={`${getStatusColor(order.status)}`}>
+                                      {order.status}
+                                    </Badge>
+                                    <span className="font-mono text-sm text-gray-600">#{order.id}</span>
+                                    <span className="text-sm text-gray-500">
+                                      {new Date(order.createdAt || order.orderTime).toLocaleString()}
+                                    </span>
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                      <p className="text-sm text-gray-600">Customer</p>
+                                      <p className="font-medium">{order.customerName || order.customerEmail || 'Guest'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-gray-600">Items</p>
+                                      <p className="font-medium">{order.items?.length || 0} item(s)</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-gray-600">Amount</p>
+                                      <p className="font-semibold text-green-600">₦{order.amount.toLocaleString()}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      </div>
-                      
-                      <Button variant="outline" size="sm">
-                        <Eye className="h-4 w-4 mr-1" />
-                        View Details
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value="reviews" className="space-y-6">
@@ -971,6 +1239,138 @@ export function FoodHubAdminDashboard({ user, onSignOut }: FoodHubAdminDashboard
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Withdrawal Dialog */}
+      <Dialog open={showWithdrawDialog} onOpenChange={setShowWithdrawDialog}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle>Withdraw Commission Earnings</DialogTitle>
+            <DialogDescription>
+              Withdraw your platform commission earnings
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+              <p className="text-sm text-green-700">
+                Available Balance: <span className="font-bold">
+                  ₦{((commissionData?.summary?.totalEarnings || 0) - (commissionData?.platformEarnings?.totalWithdrawn || 0)).toLocaleString()}
+                </span>
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="withdrawAmount">Amount *</Label>
+              <Input
+                id="withdrawAmount"
+                type="number"
+                placeholder="Enter amount (minimum ₦1,000)"
+                value={withdrawalAmount}
+                onChange={(e) => setWithdrawalAmount(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="withdrawBank">Bank *</Label>
+              <Select
+                value={withdrawalBankCode}
+                onValueChange={(value) => setWithdrawalBankCode(value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select your bank" />
+                </SelectTrigger>
+                <SelectContent>
+                  {nigerianBanks.map((bank) => (
+                    <SelectItem key={bank.code} value={bank.code}>
+                      {bank.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="withdrawAccountNumber">Account Number *</Label>
+              <Input
+                id="withdrawAccountNumber"
+                type="text"
+                placeholder="10-digit account number"
+                maxLength={10}
+                value={withdrawalAccountNumber}
+                onChange={(e) => setWithdrawalAccountNumber(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="withdrawAccountName">Account Name (Optional)</Label>
+              <Input
+                id="withdrawAccountName"
+                type="text"
+                placeholder="Account holder name"
+                value={withdrawalAccountName}
+                onChange={(e) => setWithdrawalAccountName(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="withdrawPassword">Admin Password *</Label>
+              <Input
+                id="withdrawPassword"
+                type="password"
+                placeholder="Enter your admin password"
+                value={withdrawalPassword}
+                onChange={(e) => setWithdrawalPassword(e.target.value)}
+              />
+              <p className="text-xs text-gray-500">
+                Enter your FoodHub admin password for verification
+              </p>
+            </div>
+
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
+                <p className="text-sm text-yellow-800">
+                  Withdrawals are processed immediately and cannot be reversed.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowWithdrawDialog(false);
+                setWithdrawalAmount('');
+                setWithdrawalPassword('');
+                setWithdrawalBankCode('');
+                setWithdrawalAccountNumber('');
+                setWithdrawalAccountName('');
+              }}
+              disabled={withdrawing}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAdminWithdraw}
+              disabled={withdrawing}
+              className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
+            >
+              {withdrawing ? (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                  Processing...
+                </div>
+              ) : (
+                <>
+                  <DollarSign className="h-4 w-4 mr-2" />
+                  Withdraw
+                </>
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

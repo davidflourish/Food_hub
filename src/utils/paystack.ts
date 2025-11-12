@@ -7,7 +7,7 @@ export interface PaystackConfig {
 // Get Paystack public key from environment or use test key
 export function getPaystackPublicKey(): string {
   // Paystack test public key - replace with live key in production
-  return 'pk_test_b04c1940d47ab1afdff2ec6ff599bcc5eb2c3f44';
+  return 'pk_live_66da9b621828a364e77c12d4dcd98d28888f9607';
 }
 
 // Initialize Paystack popup
@@ -15,6 +15,7 @@ export function initializePaystackPopup(
   email: string,
   amount: number, // Amount in Naira
   reference: string,
+  metadata: Record<string, any> = {}, // NEW: For order_id, vendor_id, etc.
   onSuccess: (reference: string) => void,
   onClose: () => void
 ) {
@@ -30,10 +31,12 @@ export function initializePaystackPopup(
     amount: amount * 100, // Convert to kobo
     currency: 'NGN',
     ref: reference,
+    metadata, // NEW: Pass order details for webhook matching
     onClose: function() {
       onClose();
     },
     callback: function(response: any) {
+      // Optimistic UI update (e.g., mark order as paid locally)
       onSuccess(response.reference);
     }
   });
@@ -49,7 +52,14 @@ export function formatNaira(amount: number): string {
   })}`;
 }
 
-// List of Nigerian banks (for withdrawal)
+// NEW: Helper for withdrawal amount validation (min ₦1,000, in Naira)
+export function validateWithdrawalAmount(amount: number): { valid: boolean; error?: string } {
+  if (amount < 1000) return { valid: false, error: 'Minimum withdrawal is ₦1,000' };
+  if (amount > 5000000) return { valid: false, error: 'Maximum withdrawal is ₦5,000,000' }; // Adjust as needed
+  return { valid: true };
+}
+
+// List of Nigerian banks (for withdrawal) - unchanged, looks good!
 export const nigerianBanks = [
   { name: 'Access Bank', code: '044' },
   { name: 'Citibank', code: '023' },

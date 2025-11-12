@@ -2,9 +2,15 @@
  * FoodHub Server API
  * Production-ready food delivery platform backend
  * Ready for hosting with fresh database - no demo data
+ * 
+ * IMPORTANT: Paystack Webhook Setup Required!
+ * - See WEBHOOK_URL.md for your webhook URL
+ * - See PAYSTACK_WEBHOOK_SETUP.md for complete setup guide
+ * - Webhook endpoint: /make-server-8966d869/payment/webhook
+ * - Must be configured in Paystack dashboard for payments to work!
  */
 
-import { createClient } from 'npm:@supabase/supabase-js@2.49.8';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { Hono } from "npm:hono";
 import { cors } from "npm:hono/cors";
 import { logger } from "npm:hono/logger";
@@ -25,7 +31,7 @@ const supabase = createClient(
 // Commission configuration
 const COMMISSION_RATE = 0.04; // 4% commission on all orders (SECRET - not exposed to vendors)
 const PLATFORM_OWNER_ID = 'platform_owner_flourish';
-const PAYSTACK_SECRET_KEY = Deno.env.get('PAYSTACK_SECRET_KEY') || 'sk_live_your_real_live_key_here';
+const PAYSTACK_SECRET_KEY = Deno.env.get('PAYSTACK_SECRET_KEY') || 'sk_test_830deabd2fefec06ac47620ab038ccb9414c9889';
 
 // Commission calculation and tracking functions
 async function calculateCommission(orderAmount: number) {
@@ -665,7 +671,15 @@ app.get('/make-server-8966d869/vendor/orders', async (c) => {
     }
 
     const allOrders = await kv.getByPrefix('order:');
-    const vendorOrders = allOrders.filter(order => order.vendorId === user.id);
+    console.log(`Vendor ${user.id} fetching orders - Total orders found: ${allOrders.length}`);
+    
+    // Filter to only show orders with completed payment status
+    const vendorOrders = allOrders.filter(order => 
+      order.vendorId === user.id && 
+      (order.paymentStatus === 'completed' || order.status === 'confirmed' || order.status === 'delivered')
+    );
+    
+    console.log(`Vendor ${user.id} has ${vendorOrders.length} completed orders`);
     
     return c.json({ orders: vendorOrders });
   } catch (err) {
@@ -737,7 +751,163 @@ app.post('/make-server-8966d869/payment/initialize', async (c) => {
   }
 });
 
-// Verify Paystack payment
+// Helper function to process successful payment (used by both verify and webhook)
+async function processSuccessfulPayment(reference: string, transaction: any) {
+  // CRITICAL: Only process if transaction status is 'success'
+  if (transaction.status !== 'success') {
+    console.log(`Skipping non-successful transaction: ${transaction.status} for reference ${reference}`);
+    throw new Error(`Transaction status is ${transaction.status}, not success`);
+  }
+
+  // Extract order ID from metadata
+  const orderId = transaction.metadata?.orderId || transaction.metadata?.custom_fields?.find((f: any) => f.variable_name === 'order_id')?.value;
+  
+  if (!orderId) {
+    throw new Error('Order ID not found in transaction');
+  }
+
+  // Get order details
+  const order = await kv.get(`order:${orderId}`);
+  if (!order) {
+    throw new Error('Order not found');
+  }
+
+  // Prevent double-processing
+  if (order.paymentStatus === 'completed') {
+    console.log(`Payment already processed for order ${orderId}`);
+    return { success: true, message: 'Payment already processed', orderId, alreadyProcessed: true };
+  }
+
+  const totalAmount = transaction.amount / 100; // Convert from kobo to naira
+  const commissionAmount = Math.round(totalAmount * COMMISSION_RATE);
+  const vendorAmount = totalAmount - commissionAmount;
+
+  // Create transaction record
+  const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const transactionRecord = {
+    id: transactionId,
+    orderId,
+    vendorId: order.vendorId,
+    customerId: order.customerId || 'guest',
+    totalAmount,
+    commissionAmount, // SECRET: 4% commission
+    vendorAmount, // 96% goes to vendor
+    status: 'completed',
+    paymentReference: reference,
+    paymentMethod: 'paystack',
+    createdAt: new Date().toISOString()
+  };
+
+  await kv.set(`transaction:${transactionId}`, transactionRecord);
+
+  // Update order status
+  order.status = 'confirmed';
+  order.paymentStatus = 'completed';
+  order.paymentReference = reference;
+  order.transactionId = transactionId;
+  order.paidAt = new Date().toISOString();
+  await kv.set(`order:${orderId}`, order);
+
+  // Credit vendor wallet (96% of payment)
+  const wallet = await kv.get(`wallet:${order.vendorId}`) || {
+    vendorId: order.vendorId,
+    walletBalance: 0,
+    totalEarnings: 0,
+    pendingBalance: 0,
+    totalWithdrawn: 0,
+    lastUpdated: new Date().toISOString()
+  };
+
+  wallet.walletBalance += vendorAmount;
+  wallet.totalEarnings += vendorAmount;
+  wallet.lastUpdated = new Date().toISOString();
+  await kv.set(`wallet:${order.vendorId}`, wallet);
+
+  // Track commission for admin (SECRET)
+  await trackCommission(orderId, order.vendorId, totalAmount, commissionAmount);
+
+  // Update vendor statistics
+  await updateVendorStats(order.vendorId, 'orderCompleted', {
+    amount: vendorAmount, // Vendor only sees their 96%
+    orderId: orderId
+  });
+
+  console.log(`✅ Payment processed successfully!`);
+  console.log(`   Order ID: ${orderId}`);
+  console.log(`   Transaction ID: ${transactionId}`);
+  console.log(`   Vendor ID: ${order.vendorId}`);
+  console.log(`   Total Amount: ₦${totalAmount}`);
+  console.log(`   Vendor Credit: ₦${vendorAmount} (96%)`);
+  console.log(`   Commission: ₦${commissionAmount} (4%)`);
+  console.log(`   Payment Status: ${order.paymentStatus}`);
+
+  return {
+    success: true,
+    message: 'Payment verified and wallet credited',
+    orderId,
+    transactionId,
+    vendorCredited: vendorAmount,
+    alreadyProcessed: false
+  };
+}
+
+// Paystack webhook handler - This is called by Paystack to notify about payment events
+app.post('/make-server-8966d869/payment/webhook', async (c) => {
+  try {
+    // Get raw body for signature verification
+    const rawBody = await c.req.text();
+    const hash = c.req.header('x-paystack-signature');
+
+    // Verify webhook signature using crypto
+    const crypto = await import('node:crypto');
+    const computedHash = crypto.createHmac('sha512', PAYSTACK_SECRET_KEY)
+      .update(rawBody)
+      .digest('hex');
+
+    if (hash !== computedHash) {
+      console.error('Invalid webhook signature');
+      return c.json({ error: 'Invalid signature' }, 401);
+    }
+
+    // Parse the event
+    const event = JSON.parse(rawBody);
+    console.log('Paystack webhook event received:', event.event);
+
+    // Handle charge.success event
+    if (event.event === 'charge.success') {
+      const transaction = event.data;
+      const reference = transaction.reference;
+
+      console.log(`Webhook processing payment: ${reference}`);
+
+      // Verify transaction status
+      if (transaction.status !== 'success') {
+        console.log(`Webhook received non-success transaction: ${transaction.status}`);
+        return c.json({ message: 'Transaction not successful' }, 200);
+      }
+
+      // Process the payment
+      const result = await processSuccessfulPayment(reference, transaction);
+      
+      if (result.alreadyProcessed) {
+        console.log(`Webhook: Payment already processed for ${result.orderId}`);
+      } else {
+        console.log(`Webhook: Successfully processed payment for order ${result.orderId}`);
+      }
+
+      return c.json({ message: 'Webhook processed successfully' }, 200);
+    }
+
+    // For other events, just acknowledge receipt
+    return c.json({ message: 'Event received' }, 200);
+  } catch (err) {
+    console.error('Webhook processing error:', err);
+    // Always return 200 to Paystack to prevent retries for permanent errors
+    return c.json({ message: 'Webhook error logged' }, 200);
+  }
+});
+
+// Verify Paystack payment (client-side verification)
 app.post('/make-server-8966d869/payment/verify', async (c) => {
   try {
     const { reference } = await c.req.json();
@@ -768,87 +938,10 @@ app.post('/make-server-8966d869/payment/verify', async (c) => {
       return c.json({ error: 'Payment was not successful', status: transaction.status }, 400);
     }
 
-    // Extract order ID from metadata
-    const orderId = transaction.metadata?.orderId || transaction.metadata?.custom_fields?.find((f: any) => f.variable_name === 'order_id')?.value;
-    
-    if (!orderId) {
-      return c.json({ error: 'Order ID not found in transaction' }, 400);
-    }
+    // Process the payment using the shared function
+    const result = await processSuccessfulPayment(reference, transaction);
 
-    // Get order details
-    const order = await kv.get(`order:${orderId}`);
-    if (!order) {
-      return c.json({ error: 'Order not found' }, 404);
-    }
-
-    // Prevent double-processing
-    if (order.paymentStatus === 'completed') {
-      return c.json({ success: true, message: 'Payment already processed', orderId });
-    }
-
-    const totalAmount = transaction.amount / 100; // Convert from kobo to naira
-    const commissionAmount = Math.round(totalAmount * COMMISSION_RATE);
-    const vendorAmount = totalAmount - commissionAmount;
-
-    // Create transaction record
-    const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const transactionRecord = {
-      id: transactionId,
-      orderId,
-      vendorId: order.vendorId,
-      customerId: order.customerId || 'guest',
-      totalAmount,
-      commissionAmount, // SECRET: 4% commission
-      vendorAmount, // 96% goes to vendor
-      status: 'completed',
-      paymentReference: reference,
-      paymentMethod: 'paystack',
-      createdAt: new Date().toISOString()
-    };
-
-    await kv.set(`transaction:${transactionId}`, transactionRecord);
-
-    // Update order status
-    order.status = 'confirmed';
-    order.paymentStatus = 'completed';
-    order.paymentReference = reference;
-    order.transactionId = transactionId;
-    order.paidAt = new Date().toISOString();
-    await kv.set(`order:${orderId}`, order);
-
-    // Credit vendor wallet (96% of payment)
-    const wallet = await kv.get(`wallet:${order.vendorId}`) || {
-      vendorId: order.vendorId,
-      walletBalance: 0,
-      totalEarnings: 0,
-      pendingBalance: 0,
-      totalWithdrawn: 0,
-      lastUpdated: new Date().toISOString()
-    };
-
-    wallet.walletBalance += vendorAmount;
-    wallet.totalEarnings += vendorAmount;
-    wallet.lastUpdated = new Date().toISOString();
-    await kv.set(`wallet:${order.vendorId}`, wallet);
-
-    // Track commission for admin (SECRET)
-    await trackCommission(orderId, order.vendorId, totalAmount, commissionAmount);
-
-    // Update vendor statistics
-    await updateVendorStats(order.vendorId, 'orderCompleted', {
-      amount: vendorAmount, // Vendor only sees their 96%
-      orderId: orderId
-    });
-
-    console.log(`Payment verified: ₦${totalAmount} | Vendor gets: ₦${vendorAmount} | Commission: ₦${commissionAmount}`);
-
-    return c.json({
-      success: true,
-      message: 'Payment verified and wallet credited',
-      orderId,
-      transactionId,
-      vendorCredited: vendorAmount // Vendor only sees their credited amount
-    });
+    return c.json(result);
   } catch (err) {
     console.log('Payment verification error:', err);
     return c.json({ error: 'Failed to verify payment' }, 500);
@@ -988,6 +1081,27 @@ app.get('/make-server-8966d869/admin/vendors', async (c) => {
 
 app.get('/make-server-8966d869/admin/orders', async (c) => {
   try {
+    // Check for admin user header (for direct admin auth)
+    const adminUserHeader = c.req.header('X-Admin-User');
+    
+    if (adminUserHeader) {
+      try {
+        const adminUser = JSON.parse(adminUserHeader);
+        if (adminUser.role === 'admin' && adminUser.email === 'flourisholuwatimilehin@gmail.com') {
+          console.log('Admin orders access granted via header for:', adminUser.email);
+          const allOrders = await kv.getByPrefix('order:');
+          // Filter to only show orders with completed payment status
+          const successfulOrders = allOrders.filter(order => 
+            order.paymentStatus === 'completed' || order.status === 'confirmed' || order.status === 'delivered'
+          );
+          return c.json({ orders: successfulOrders || [] });
+        }
+      } catch (parseError) {
+        console.log('Invalid admin user header:', parseError);
+      }
+    }
+
+    // Fallback to Supabase auth
     const accessToken = c.req.header('Authorization')?.split(' ')[1];
     const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
     
@@ -1000,8 +1114,12 @@ app.get('/make-server-8966d869/admin/orders', async (c) => {
       return c.json({ error: 'Admin access required' }, 403);
     }
 
-    const orders = await kv.getByPrefix('order:');
-    return c.json({ orders });
+    const allOrders = await kv.getByPrefix('order:');
+    // Filter to only show orders with completed payment status
+    const successfulOrders = allOrders.filter(order => 
+      order.paymentStatus === 'completed' || order.status === 'confirmed' || order.status === 'delivered'
+    );
+    return c.json({ orders: successfulOrders || [] });
   } catch (err) {
     console.log('Admin orders get error:', err);
     return c.json({ error: 'Failed to get orders' }, 500);
@@ -1027,9 +1145,10 @@ app.get('/make-server-8966d869/admin/commissions', async (c) => {
             monthlyEarnings: {},
           };
           
-          // Get recent commission records
+          // Get recent commission records - ONLY SUCCESSFUL/COMPLETED ONES
           const allCommissions = await kv.getByPrefix('commission:');
           const recentCommissions = allCommissions
+            .filter(commission => commission.status === 'earned') // Only show earned/completed commissions
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .slice(0, 50); // Last 50 commission records
           
@@ -1075,6 +1194,7 @@ app.get('/make-server-8966d869/admin/commissions', async (c) => {
     
     const allCommissions = await kv.getByPrefix('commission:');
     const recentCommissions = allCommissions
+      .filter(commission => commission.status === 'earned') // Only show earned/completed commissions
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 50);
     
@@ -1120,9 +1240,10 @@ app.get('/make-server-8966d869/vendor/wallet', async (c) => {
     };
 
     // Get recent transactions (vendor only sees their credited amounts)
+    // ONLY SHOW COMPLETED TRANSACTIONS
     const allTransactions = await kv.getByPrefix('transaction:');
     const vendorTransactions = allTransactions
-      .filter(txn => txn.vendorId === user.id)
+      .filter(txn => txn.vendorId === user.id && txn.status === 'completed') // Only completed transactions
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 20)
       .map(txn => ({
@@ -1371,19 +1492,83 @@ app.post('/make-server-8966d869/admin/withdraw', async (c) => {
   }
 });
 
+// Get admin withdrawal history (admin only)
+app.get('/make-server-8966d869/admin/withdrawals', async (c) => {
+  try {
+    // Check for admin authentication
+    const adminUserHeader = c.req.header('X-Admin-User');
+    let isAdmin = false;
+
+    if (adminUserHeader) {
+      try {
+        const adminUser = JSON.parse(adminUserHeader);
+        if (adminUser.role === 'admin' && adminUser.email === 'flourisholuwatimilehin@gmail.com') {
+          isAdmin = true;
+        }
+      } catch (parseError) {
+        console.log('Invalid admin user header');
+      }
+    }
+
+    if (!isAdmin) {
+      const accessToken = c.req.header('Authorization')?.split(' ')[1];
+      const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
+      
+      if (!user || authError || user.user_metadata?.role !== 'admin') {
+        return c.json({ error: 'Unauthorized - Admin access required' }, 401);
+      }
+    }
+
+    // Get all admin withdrawals
+    const withdrawals = await kv.getByPrefix('admin_withdrawal:');
+    
+    // Sort by creation date (most recent first)
+    const sortedWithdrawals = withdrawals.sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    return c.json({
+      success: true,
+      withdrawals: sortedWithdrawals
+    });
+  } catch (err) {
+    console.log('Get admin withdrawals error:', err);
+    return c.json({ error: 'Failed to get withdrawal history' }, 500);
+  }
+});
+
 // Update vendor status (admin only)
 app.put('/make-server-8966d869/admin/vendors/:vendorId/status', async (c) => {
   try {
-    const accessToken = c.req.header('Authorization')?.split(' ')[1];
-    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
+    // Check for admin user header (for direct admin auth)
+    const adminUserHeader = c.req.header('X-Admin-User');
+    let isAuthorized = false;
     
-    if (!user || authError) {
-      return c.json({ error: 'Unauthorized' }, 401);
+    if (adminUserHeader) {
+      try {
+        const adminUser = JSON.parse(adminUserHeader);
+        if (adminUser.role === 'admin' && adminUser.email === 'flourisholuwatimilehin@gmail.com') {
+          console.log('Admin status update access granted via header for:', adminUser.email);
+          isAuthorized = true;
+        }
+      } catch (parseError) {
+        console.log('Invalid admin user header:', parseError);
+      }
     }
 
-    // Check if user is admin
-    if (user.user_metadata?.role !== 'admin') {
-      return c.json({ error: 'Admin access required' }, 403);
+    if (!isAuthorized) {
+      // Fallback to Supabase auth
+      const accessToken = c.req.header('Authorization')?.split(' ')[1];
+      const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
+      
+      if (!user || authError) {
+        return c.json({ error: 'Unauthorized' }, 401);
+      }
+
+      // Check if user is admin
+      if (user.user_metadata?.role !== 'admin') {
+        return c.json({ error: 'Admin access required' }, 403);
+      }
     }
 
     const vendorId = c.req.param('vendorId');
@@ -1396,7 +1581,7 @@ app.put('/make-server-8966d869/admin/vendors/:vendorId/status', async (c) => {
     
     await kv.set(`vendor:${vendorId}`, {
       ...vendor,
-      status,
+      status: status !== undefined ? status : vendor.status,
       isVerified: isVerified !== undefined ? isVerified : vendor.isVerified,
       updatedAt: new Date().toISOString()
     });
@@ -1551,10 +1736,13 @@ app.get('/make-server-8966d869/vendor/stats', async (c) => {
     const today = new Date().toISOString().split('T')[0];
     const todayStats = analytics?.dailyStats?.[today] || { orders: 0, revenue: 0 };
 
-    // Get recent orders for the vendor
+    // Get recent orders for the vendor - ONLY COMPLETED PAYMENTS
     const allOrders = await kv.getByPrefix('order:');
     const vendorOrders = allOrders
-      .filter(order => order.vendorId === user.id)
+      .filter(order => 
+        order.vendorId === user.id && 
+        (order.paymentStatus === 'completed' || order.status === 'confirmed' || order.status === 'delivered')
+      )
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 5); // Get latest 5 orders
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
@@ -19,9 +19,12 @@ import {
   AlertCircle,
   Truck,
   Timer,
-  ChefHat
+  ChefHat,
+  RefreshCw,
+  ShoppingBag
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
+import { vendorAPI } from '../utils/api';
 
 interface User {
   id: string;
@@ -59,78 +62,49 @@ interface OrdersManagementProps {
 }
 
 export function OrdersManagement({ user }: OrdersManagementProps) {
-  const [orders, setOrders] = useState<Order[]>([
-    {
-      id: 'ORD001',
-      customer: {
-        name: 'Sarah Johnson',
-        phone: '+1 (555) 123-4567',
-        address: '123 Main St, Apt 4B, Downtown'
-      },
-      items: [
-        { name: 'Chicken Tikka Masala', quantity: 1, price: 18.99 },
-        { name: 'Basmati Rice', quantity: 1, price: 4.99 }
-      ],
-      total: 23.98,
-      status: 'pending',
-      orderTime: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-      paymentMethod: 'Credit Card'
-    },
-    {
-      id: 'ORD002',
-      customer: {
-        name: 'Mike Chen',
-        phone: '+1 (555) 987-6543',
-        address: '456 Oak Avenue, Suite 12, Midtown'
-      },
-      items: [
-        { name: 'Quinoa Buddha Bowl', quantity: 2, price: 14.99 },
-        { name: 'Green Smoothie', quantity: 1, price: 6.99 }
-      ],
-      total: 36.97,
-      status: 'preparing',
-      orderTime: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-      paymentMethod: 'PayPal'
-    },
-    {
-      id: 'ORD003',
-      customer: {
-        name: 'Emma Davis',
-        phone: '+1 (555) 456-7890',
-        address: '789 Pine Street, Floor 3, Uptown'
-      },
-      items: [
-        { name: 'Classic Margherita Pizza', quantity: 1, price: 16.50, specialInstructions: 'Extra cheese, light sauce' }
-      ],
-      total: 16.50,
-      status: 'ready',
-      orderTime: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
-      paymentMethod: 'Cash'
-    },
-    {
-      id: 'ORD004',
-      customer: {
-        name: 'John Smith',
-        phone: '+1 (555) 234-5678',
-        address: '321 Elm Street, House 45, Suburbs'
-      },
-      items: [
-        { name: 'Chicken Tikka Masala', quantity: 1, price: 18.99 },
-        { name: 'Naan Bread', quantity: 2, price: 3.99 },
-        { name: 'Mango Lassi', quantity: 1, price: 4.99 }
-      ],
-      total: 31.96,
-      status: 'delivered',
-      orderTime: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      deliveryTime: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-      paymentMethod: 'Credit Card',
-      customerRating: 5,
-      customerReview: 'Amazing food! Fast delivery and everything was hot and fresh.'
-    }
-  ]);
-
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  // Load orders from backend
+  const loadOrders = async () => {
+    try {
+      setLoading(true);
+      const response = await vendorAPI.getOrders();
+      
+      // Map backend orders to component format
+      const mappedOrders = (response.orders || []).map((order: any) => ({
+        id: order.id,
+        customer: {
+          name: order.customerName || 'Customer',
+          phone: order.customerPhone || 'N/A',
+          address: order.deliveryAddress || 'N/A'
+        },
+        items: order.items || [],
+        total: order.amount || 0,
+        status: order.status || 'pending',
+        orderTime: order.createdAt,
+        deliveryTime: order.deliveredAt,
+        paymentMethod: order.paymentMethod || 'Paystack',
+        customerRating: order.customerRating,
+        customerReview: order.customerReview
+      }));
+      
+      setOrders(mappedOrders);
+      console.log('Orders loaded:', mappedOrders.length);
+    } catch (error) {
+      console.error('Error loading orders:', error);
+      toast.error('Failed to load orders');
+      setOrders([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadOrders();
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -156,14 +130,23 @@ export function OrdersManagement({ user }: OrdersManagementProps) {
     }
   };
 
-  const updateOrderStatus = (orderId: string, newStatus: Order['status']) => {
-    setOrders(prev => prev.map(order => 
-      order.id === orderId 
-        ? { ...order, status: newStatus }
-        : order
-    ));
-    
-    toast.success(`Order ${orderId} status updated to ${newStatus}`);
+  const updateOrderStatus = async (orderId: string, newStatus: Order['status']) => {
+    try {
+      // Update status via API
+      await vendorAPI.updateOrderStatus(orderId, newStatus);
+      
+      // Update local state
+      setOrders(prev => prev.map(order => 
+        order.id === orderId 
+          ? { ...order, status: newStatus }
+          : order
+      ));
+      
+      toast.success(`Order ${orderId} status updated to ${newStatus}`);
+    } catch (error) {
+      console.error('Error updating order status:', error);
+      toast.error('Failed to update order status');
+    }
   };
 
   const getTimeAgo = (dateString: string) => {
@@ -203,6 +186,15 @@ export function OrdersManagement({ user }: OrdersManagementProps) {
           <p className="text-gray-600">Track and manage your customer orders</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={loadOrders}
+            disabled={loading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
           <Badge variant="outline" className="bg-yellow-50">
             {pendingOrders.length} Pending
           </Badge>
@@ -216,52 +208,71 @@ export function OrdersManagement({ user }: OrdersManagementProps) {
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Today's Orders</p>
-                <p className="text-2xl font-bold">{orders.length}</p>
-              </div>
-              <Clock className="h-8 w-8 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Revenue</p>
-                <p className="text-2xl font-bold">${orders.reduce((sum, order) => sum + order.total, 0).toFixed(2)}</p>
-              </div>
-              <DollarSign className="h-8 w-8 text-green-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Avg Rating</p>
-                <p className="text-2xl font-bold">4.8</p>
-              </div>
-              <Star className="h-8 w-8 text-yellow-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Completion Rate</p>
-                <p className="text-2xl font-bold">96%</p>
-              </div>
-              <CheckCircle className="h-8 w-8 text-green-500" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {loading ? (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-red-500 border-t-transparent mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading orders...</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Total Orders</p>
+                    <p className="text-2xl font-bold">{orders.length}</p>
+                  </div>
+                  <Clock className="h-8 w-8 text-blue-500" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Revenue</p>
+                    <p className="text-2xl font-bold">₦{orders.reduce((sum, order) => sum + order.total, 0).toLocaleString()}</p>
+                  </div>
+                  <DollarSign className="h-8 w-8 text-green-500" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Avg Rating</p>
+                    <p className="text-2xl font-bold">
+                      {orders.filter(o => o.customerRating).length > 0 
+                        ? (orders.filter(o => o.customerRating).reduce((sum, o) => sum + (o.customerRating || 0), 0) / orders.filter(o => o.customerRating).length).toFixed(1)
+                        : '0.0'
+                      }
+                    </p>
+                  </div>
+                  <Star className="h-8 w-8 text-yellow-500" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Completion Rate</p>
+                    <p className="text-2xl font-bold">
+                      {orders.length > 0 
+                        ? Math.round((orders.filter(o => o.status === 'delivered').length / orders.length) * 100)
+                        : 0
+                      }%
+                    </p>
+                  </div>
+                  <CheckCircle className="h-8 w-8 text-green-500" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
@@ -298,10 +309,22 @@ export function OrdersManagement({ user }: OrdersManagementProps) {
         </TabsList>
 
         <TabsContent value="active" className="space-y-4">
-          <div className="grid grid-cols-1 gap-4">
-            {filteredOrders
-              .filter(order => !['delivered', 'cancelled'].includes(order.status))
-              .map((order) => (
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-2 border-red-500 border-t-transparent mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading orders...</p>
+            </div>
+          ) : filteredOrders.filter(order => !['delivered', 'cancelled'].includes(order.status)).length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <ShoppingBag className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+              <p className="text-lg">No active orders yet</p>
+              <p className="text-sm">Orders from customers will appear here</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {filteredOrders
+                .filter(order => !['delivered', 'cancelled'].includes(order.status))
+                .map((order) => (
               <Card key={order.id} className="hover:shadow-lg transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -342,7 +365,7 @@ export function OrdersManagement({ user }: OrdersManagementProps) {
                             {order.items.map((item, index) => (
                               <li key={index} className="text-sm">
                                 <span className="text-gray-600">{item.quantity}x</span> {item.name}
-                                <span className="text-green-600 ml-2">${item.price}</span>
+                                <span className="text-green-600 ml-2">₦{item.price?.toLocaleString()}</span>
                                 {item.specialInstructions && (
                                   <p className="text-xs text-orange-600 italic">
                                     Note: {item.specialInstructions}
@@ -352,7 +375,7 @@ export function OrdersManagement({ user }: OrdersManagementProps) {
                             ))}
                           </ul>
                           <div className="mt-2 pt-2 border-t">
-                            <p className="font-semibold">Total: <span className="text-green-600">${order.total}</span></p>
+                            <p className="font-semibold">Total: <span className="text-green-600">₦{order.total?.toLocaleString()}</span></p>
                             <p className="text-sm text-gray-500">Payment: {order.paymentMethod}</p>
                           </div>
                         </div>
@@ -413,13 +436,26 @@ export function OrdersManagement({ user }: OrdersManagementProps) {
               </Card>
             ))}
           </div>
+          )}
         </TabsContent>
 
         <TabsContent value="completed" className="space-y-4">
-          <div className="grid grid-cols-1 gap-4">
-            {filteredOrders
-              .filter(order => ['delivered', 'cancelled'].includes(order.status))
-              .map((order) => (
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-2 border-red-500 border-t-transparent mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading orders...</p>
+            </div>
+          ) : filteredOrders.filter(order => ['delivered', 'cancelled'].includes(order.status)).length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <CheckCircle className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+              <p className="text-lg">No completed orders yet</p>
+              <p className="text-sm">Completed orders will appear here</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {filteredOrders
+                .filter(order => ['delivered', 'cancelled'].includes(order.status))
+                .map((order) => (
               <Card key={order.id} className="hover:shadow-lg transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -439,7 +475,7 @@ export function OrdersManagement({ user }: OrdersManagementProps) {
                           <p className="text-sm text-gray-600">{order.customer.phone}</p>
                         </div>
                         <div>
-                          <p className="font-semibold">Total: <span className="text-green-600">${order.total}</span></p>
+                          <p className="font-semibold">Total: <span className="text-green-600">₦{order.total?.toLocaleString()}</span></p>
                           <p className="text-sm text-gray-500">
                             {order.items.length} item{order.items.length > 1 ? 's' : ''}
                           </p>
@@ -463,48 +499,62 @@ export function OrdersManagement({ user }: OrdersManagementProps) {
               </Card>
             ))}
           </div>
+          )}
         </TabsContent>
 
         <TabsContent value="reviews" className="space-y-4">
-          <div className="grid grid-cols-1 gap-4">
-            {orders
-              .filter(order => order.customerRating && order.customerReview)
-              .map((order) => (
-              <Card key={order.id}>
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4">
-                    <Avatar className="h-12 w-12">
-                      <AvatarFallback>{order.customer.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <p className="font-medium">{order.customer.name}</p>
-                        <div className="flex items-center gap-1">
-                          {[...Array(5)].map((_, i) => (
-                            <Star 
-                              key={i} 
-                              className={`h-4 w-4 ${
-                                i < (order.customerRating || 0) 
-                                  ? 'text-yellow-400 fill-current' 
-                                  : 'text-gray-300'
-                              }`} 
-                            />
-                          ))}
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-2 border-red-500 border-t-transparent mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading reviews...</p>
+            </div>
+          ) : orders.filter(order => order.customerRating && order.customerReview).length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <Star className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+              <p className="text-lg">No reviews yet</p>
+              <p className="text-sm">Customer reviews will appear here</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {orders
+                .filter(order => order.customerRating && order.customerReview)
+                .map((order) => (
+                <Card key={order.id}>
+                  <CardContent className="p-6">
+                    <div className="flex items-start gap-4">
+                      <Avatar className="h-12 w-12">
+                        <AvatarFallback>{order.customer.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <p className="font-medium">{order.customer.name}</p>
+                          <div className="flex items-center gap-1">
+                            {[...Array(5)].map((_, i) => (
+                              <Star 
+                                key={i} 
+                                className={`h-4 w-4 ${
+                                  i < (order.customerRating || 0) 
+                                    ? 'text-yellow-400 fill-current' 
+                                    : 'text-gray-300'
+                                }`} 
+                              />
+                            ))}
+                          </div>
+                          <span className="text-sm text-gray-500">
+                            {getTimeAgo(order.deliveryTime || order.orderTime)}
+                          </span>
                         </div>
-                        <span className="text-sm text-gray-500">
-                          {getTimeAgo(order.deliveryTime || order.orderTime)}
-                        </span>
+                        <p className="text-gray-700 mb-2">{order.customerReview}</p>
+                        <p className="text-sm text-gray-500">
+                          Order #{order.id} • {order.items.map((item: any) => item.name).join(', ')}
+                        </p>
                       </div>
-                      <p className="text-gray-700 mb-2">{order.customerReview}</p>
-                      <p className="text-sm text-gray-500">
-                        Order #{order.id} • {order.items.map(item => item.name).join(', ')}
-                      </p>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

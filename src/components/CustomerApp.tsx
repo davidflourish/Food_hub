@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../utils/supabase/client';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -22,7 +21,7 @@ import {
   Receipt,
   ChefHat
 } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { customerAPI, paymentAPI } from '../utils/api';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
 import { formatNaira, nigerianBanks } from '../utils/paystack';
@@ -40,7 +39,7 @@ interface User {
 
 interface CustomerAppProps {
   user: User;
-  onSignOut?: () => void;  // Optional now
+  onSignOut: () => void;
 }
 
 interface Vendor {
@@ -85,6 +84,8 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
   const [processingPayment, setProcessingPayment] = useState(false);
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliveryNotes, setDeliveryNotes] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
 
   useEffect(() => {
     const loadVendorsAndMenus = async () => {
@@ -100,7 +101,7 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
           deliveryTime: '20-30 min', // Default for now
           image: 'https://images.unsplash.com/photo-1645066803695-f0dbe2c33e42?w=400', // Default image
           isOpen: vendor.status === 'active',
-          deliveryFee: 250, // Default delivery fee
+          deliveryFee: 450, // Default delivery fee
           distance: '1-2 km' // Default distance
         }));
         
@@ -123,20 +124,7 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
     loadVendorsAndMenus();
   }, []);
 
-  const handleLocalSignOut = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();  // Modern v2 call
-      if (error) throw error;
-      
-      toast.success('Signed out successfully!');
-      // Redirect or emit event to parent
-      window.location.href = '/';  // Simple redirect
-      localStorage.removeItem('foodhub_admin_user');
-    } catch (error) {
-      console.error('Sign out error:', error);
-      toast.error('Failed to sign out—try refreshing.');
-    }
-  };
+
 
   const addToCart = (item: MenuItem) => {
     setCart(prev => {
@@ -189,6 +177,16 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
   };
 
   const handleCheckout = async () => {
+    if (!customerName.trim()) {
+      toast.error('Please enter your name');
+      return;
+    }
+
+    if (!customerPhone.trim()) {
+      toast.error('Please enter your phone number');
+      return;
+    }
+
     if (!deliveryAddress.trim()) {
       toast.error('Please enter a delivery address');
       return;
@@ -200,7 +198,6 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
     }
 
     setProcessingPayment(true);
-   
 
     try {
       // Group cart items by vendor
@@ -228,6 +225,8 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
           vendorId,
           customerId: user.id,
           customerEmail: user.email,
+          customerName: customerName || user.businessName || user.email,
+          customerPhone: customerPhone || 'N/A',
           items: cart.map(item => ({
             id: item.id,
             name: item.name,
@@ -245,15 +244,15 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
 
       const orderData = await orderResponse.json();
 
-      // if (!orderResponse.ok) {
-      //   throw new Error(orderData.error || 'Failed to create order');
-      // }
+      if (!orderResponse.ok) {
+        throw new Error(orderData.error || 'Failed to create order');
+      }
 
-      if (orderResponse.ok) {
-        // console.log('Order created:', orderData);
-            setShowCheckoutDialog(false);
       const orderId = orderData.orderId;
-      
+
+      // Close dialog early after successful order creation
+      setShowCheckoutDialog(false);
+
       // Initialize Paystack payment
       const paymentResponse = await paymentAPI.initialize(orderId, user.email, finalTotal);
 
@@ -274,7 +273,7 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
       }
 
       // Open Paystack payment popup
-      const paystackPublicKey = 'pk_live_66da9b621828a364e77c12d4dcd98d28888f9607'; // Paystack test public key
+      const paystackPublicKey = 'pk_test_560ded5db8f17a662bbfc72bd00ccc3885f82e7d'; // Paystack test public key
       const handler = (window as any).PaystackPop.setup({
         key: paystackPublicKey,
         email: user.email,
@@ -285,35 +284,33 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
           setProcessingPayment(false);
           toast.info('Payment cancelled');
         },
-        onSuccess: async function(transaction: any) {  // FIXED: Use 'onSuccess' with 'transaction' arg
-          console.log('Paystack success:', transaction);  // Debug log (remove after testing)
-          // Verify payment
-          try {
-            const verifyResponse = await paymentAPI.verify(transaction.reference);
-
-            if (verifyResponse.success) {
-              toast.success('Payment successful! Order confirmed.');
-              setCart([]);
-              // setShowCheckoutDialog(false);
-              setDeliveryAddress('');
-              setDeliveryNotes('');
-              setActiveTab('orders');
-            } else {
-              toast.error('Payment verification failed');
-            }
-          } catch (error) {
-            console.error('Payment verification error:', error);
-            toast.error('Failed to verify payment');
-          } finally {
-            setProcessingPayment(false);
-          }
+        callback: function(response: any) {
+          // Verify payment (handle async with promises)
+          paymentAPI.verify(response.reference)
+            .then((verifyResponse) => {
+              if (verifyResponse.success) {
+                toast.success('Payment successful! Order confirmed.');
+                setCart([]);
+                setDeliveryAddress('');
+                setDeliveryNotes('');
+                setCustomerName('');
+                setCustomerPhone('');
+                setActiveTab('orders');
+              } else {
+                toast.error('Payment verification failed');
+              }
+            })
+            .catch((error) => {
+              console.error('Payment verification error:', error);
+              toast.error('Failed to verify payment');
+            })
+            .finally(() => {
+              setProcessingPayment(false);
+            });
         }
       });
 
       handler.openIframe();
-      }
-
-
     } catch (error) {
       console.error('Checkout error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to process checkout');
@@ -370,7 +367,6 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
       console.log(`Error loading menu for vendor ${vendorId}:`, error);
     } finally {
       setLoadingMenus(false);
-  
     }
   };
 
@@ -416,7 +412,7 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
                 </div>
               </div>
 
-              <Button variant="outline" size="sm" onClick={onSignOut || handleLocalSignOut}>
+              <Button variant="outline" size="sm" onClick={onSignOut}>
                 <LogOut className="h-4 w-4 mr-2" />
                 Sign Out
               </Button>
@@ -804,6 +800,29 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
 
           <div className="space-y-4">
             <div className="space-y-2">
+              <Label htmlFor="customerName">Your Name *</Label>
+              <Input
+                id="customerName"
+                placeholder="Enter your full name..."
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="customerPhone">Phone Number *</Label>
+              <Input
+                id="customerPhone"
+                type="tel"
+                placeholder="e.g., 08012345678"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="deliveryAddress">Delivery Address *</Label>
               <textarea
                 id="deliveryAddress"
@@ -862,7 +881,7 @@ export function CustomerApp({ user, onSignOut }: CustomerAppProps) {
             </Card>
           </div>
 
-          <DialogFooter>
+         <DialogFooter>
             <Button
               variant="outline"
               onClick={() => setShowCheckoutDialog(false)}

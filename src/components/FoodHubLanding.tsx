@@ -682,7 +682,7 @@ export function FoodHubLanding({ onAuth }: FoodHubLandingProps) {
                 Connecting food lovers with local vendors, one meal at a time.
               </p>
             </div>
-            <div>
+            {/* <div>
               <h4 className="font-semibold mb-4">For Vendors</h4>
               <ul className="space-y-2 text-gray-400">
                 <li>Getting Started</li>
@@ -690,8 +690,8 @@ export function FoodHubLanding({ onAuth }: FoodHubLandingProps) {
                 <li>Support</li>
                 <li>Resources</li>
               </ul>
-            </div>
-            <div>
+            </div> */}
+            {/* <div>
               <h4 className="font-semibold mb-4">For Customers</h4>
               <ul className="space-y-2 text-gray-400">
                 <li>Download App</li>
@@ -699,7 +699,7 @@ export function FoodHubLanding({ onAuth }: FoodHubLandingProps) {
                 <li>Help Center</li>
                 <li>Safety</li>
               </ul>
-            </div>
+            </div> */}
             {/* <div>
               <h4 className="font-semibold mb-4">Company</h4>
               <ul className="space-y-2 text-gray-400">
@@ -795,7 +795,7 @@ export function FoodHubLanding({ onAuth }: FoodHubLandingProps) {
                 </div>
                 <div>
                   <h4 className="font-medium">Email Support</h4>
-                  <p className="text-sm text-gray-600">support@foodhub.com</p>
+                  <p className="text-sm text-gray-600">clrharriet@gmail.com</p>
                 </div>
               </div>
               
@@ -805,7 +805,7 @@ export function FoodHubLanding({ onAuth }: FoodHubLandingProps) {
                 </div>
                 <div>
                   <h4 className="font-medium">Phone Support</h4>
-                  <p className="text-sm text-gray-600">+1 (555) 123-FOOD</p>
+                  <p className="text-sm text-gray-600">(+234) 7033917378</p>
                 </div>
               </div>
               
@@ -829,11 +829,11 @@ export function FoodHubLanding({ onAuth }: FoodHubLandingProps) {
               </div>
             </div>
             
-            <div className="text-center">
+            {/* <div className="text-center">
               <Button className="w-full bg-gradient-to-r from-red-500 to-green-500 hover:from-red-600 hover:to-green-600">
                 Send us a Message
               </Button>
-            </div>
+            </div> */}
           </div>
         </DialogContent>
       </Dialog>

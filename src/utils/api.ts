@@ -15,7 +15,7 @@ async function apiCall(endpoint: string, options: RequestInit = {}) {
     token = publicAnonKey;
     
     // Add admin user info to headers
-    const headers = { 
+    const headers = {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'X-Admin-User': adminUser,
@@ -151,6 +151,16 @@ export const adminAPI = {
 
   // Get commission data
   getCommissions: () => apiCall('/admin/commissions'),
+
+  // Admin withdrawal
+  withdraw: (amount: number, password: string, bankCode?: string, accountNumber?: string, accountName?: string) =>
+    apiCall('/admin/withdraw', {
+      method: 'POST',
+      body: JSON.stringify({ amount, password, bankCode, accountNumber, accountName }),
+    }),
+
+  // Get admin withdrawal history
+  getWithdrawals: () => apiCall('/admin/withdrawals'),
 };
 
 // Payment API calls
